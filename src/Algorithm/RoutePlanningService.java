@@ -18,6 +18,8 @@ import net.sf.javaml.core.Instance;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import static Util.FileUtil.saveClustersToFile;
+
 /**
  * Service for load balancing and route planning.
  * (Where core algorithm lies.)
@@ -49,7 +51,7 @@ public class RoutePlanningService {
             "kYz0CtG6dT4WjVK0Pnh8oLrGtKHs9GAK",
             "Kw9PkY6v44LQFo9DIokOIWXMQN9rG95d");
 
-    public TMSRoutePlan getOptimalPlan(int minTour, int maxTour) {
+    public List<List<SimplifiedTMSOrder>> getOptimalPlan(int minTour, int maxTour) {
         try {
             double mediumSize = (double) (minTour + maxTour) / 2.0;
             // TODO still have bugs
@@ -67,30 +69,63 @@ public class RoutePlanningService {
             }
             PerformanceMonitor.GAFinished();
 
-            List<SimplifiedTMSOrder> optimalPlanPoints = new ArrayList<>();
-            List<Integer> optimalBreaks = new ArrayList<>();
-            for (int j = 0; j < optimalCandidates.size(); j++) {
-                TMSRoutePlan singleRouteOptimized = optimalCandidates.get(j);
-                List<SimplifiedTMSOrder> ords = singleRouteOptimized.getPoints();
-                for (int i = 0; i < ords.size(); i++) {
-                    optimalPlanPoints.add(ords.get(i));
-                }
-                if (j != ords.size() - 1)
-                    optimalBreaks.add(ords.size());
+            List<List<SimplifiedTMSOrder>> returning = new ArrayList<>();
+            for (TMSRoutePlan optRP : optimalCandidates) {
+                returning.add(optRP.getPoints());
             }
-
-            optimalBreaks.set(0, optimalBreaks.get(0) - 1);
-            int sum = optimalBreaks.get(0);
-            for (int i = 1; i < optimalBreaks.size(); i++) {
-                sum += optimalBreaks.get(i);
-                optimalBreaks.set(i, sum);
-            }
-            TMSRoutePlan returning = new TMSRoutePlan(optimalPlanPoints, optimalBreaks, -1, -1);
             FileUtil.saveResultsToFile(returning);
             return returning;
         } catch (InterruptedException e) {
             return null;
         }
+    }
+
+    public static List<Integer> getDistances(List<List<SimplifiedTMSOrder>> routes) {
+        List<Integer> returnVal = new ArrayList<>();
+        for (int i = 0; i < routes.size(); i++) {
+            returnVal.add(getRouteDrivingDistance(routes.get(i), TMSRoutePlan.depotLocation));
+        }
+
+        return returnVal;
+    }
+
+    private static int getRouteDrivingDistance(List<SimplifiedTMSOrder> wayPoints, SimplifiedTMSOrder depot) {
+        int sumDistance = 0;
+        LatLon depotLL = depot.getLatlon();
+        LatLon firstWP = wayPoints.get(0).getLatlon();
+        LatLon lastWP = wayPoints.get(wayPoints.size() - 1).getLatlon();
+        for (int i = 1; i < wayPoints.size(); i++) {
+            LatLon prev = wayPoints.get(i - 1).getLatlon();
+            LatLon next = wayPoints.get(i).getLatlon();
+            try {
+                int curDistance = OpenStreetMap.getDrivingDistance(prev, next);
+                sumDistance += curDistance;
+            } catch (Exception e) {
+                int curDistance = (int) Math.ceil(GeoPolygon.getEarthDistance(prev.getLat(),
+                        prev.getLon(), next.getLat(), next.getLon()) * 1000);
+                sumDistance += curDistance;
+            }
+        }
+
+        try {
+            int curDistance = OpenStreetMap.getDrivingDistance(depotLL, firstWP);
+            sumDistance += curDistance;
+        } catch (Exception e) {
+            int curDistance = (int) Math.ceil(GeoPolygon.getEarthDistance(depotLL.getLat(),
+                    depotLL.getLon(), firstWP.getLat(), firstWP.getLon()) * 1000);
+            sumDistance += curDistance;
+        }
+
+        try {
+            int curDistance = OpenStreetMap.getDrivingDistance(lastWP, depotLL);
+            sumDistance += curDistance;
+        } catch (Exception e) {
+            int curDistance = (int) Math.ceil(GeoPolygon.getEarthDistance(lastWP.getLat(),
+                    lastWP.getLon(), depotLL.getLat(), depotLL.getLon()) * 1000);
+            sumDistance += curDistance;
+        }
+
+        return sumDistance;
     }
 
     private List<List<SimplifiedTMSOrder>> kmeansCluster(List<SimplifiedTMSOrder> pts, int numClusters) {
@@ -115,7 +150,7 @@ public class RoutePlanningService {
         return clusterOfPoints;
     }
 
-    private SimplifiedTMSOrder electCentroid(List<SimplifiedTMSOrder> pointsInCluster) {
+    public static SimplifiedTMSOrder electCentroid(List<SimplifiedTMSOrder> pointsInCluster) {
         double minTotalDist = Double.MAX_VALUE;
         SimplifiedTMSOrder clusterCenterReal = null;
 
@@ -139,7 +174,7 @@ public class RoutePlanningService {
         final int mediumSize = (int) Math.ceil((double) pts.size() / (double) numClusters);
         final Dataset pointsSet = new DefaultDataset();
         KMeans clusterer_ = new KMeans(numClusters, 10000);
-;       final KMedoids clusterer = new KMedoids(numClusters, 800, new DropoffPointsDistanceMeasure());
+        final KMedoids clusterer = new KMedoids(numClusters, 800, new DropoffPointsDistanceMeasure());
         for (SimplifiedTMSOrder stmso : pts) {
             pointsSet.add(new DenseInstance(new double[]{stmso.getLatlon().getLat(), stmso.getLatlon().getLon()},
                     stmso.getOrderLabel()));
@@ -148,53 +183,53 @@ public class RoutePlanningService {
         final List<Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>>> clusteredMaps = new ArrayList<>();
         List<Thread> threadPool = new ArrayList<>();
         final int[] iterationConstant = {0};
-        for (int i = 0; i < 10; i++) {
-            Thread workerThread = new Thread(() -> {
-                for (int i1 = 0; i1 < 100; i1++) {
-                    System.out.println("Before clustering: " + System.currentTimeMillis());
-                    Dataset[] clustered = clusterer_.cluster(pointsSet);
-                    System.out.println("After clustering: " + System.currentTimeMillis());
-                    List<SimplifiedTMSOrder> centroids = new ArrayList<>();
+//        for (int i = 0; i < 10; i++) {
+//            Thread workerThread = new Thread(() -> {
+        for (int i1 = 0; i1 < 1000; i1++) {
+            System.out.println("Before clustering: " + System.currentTimeMillis());
+            Dataset[] clustered = clusterer_.cluster(pointsSet);
+            System.out.println("After clustering: " + System.currentTimeMillis());
+            List<SimplifiedTMSOrder> centroids = new ArrayList<>();
 
-                    // Stores such pairs: <SimplifiedTMSOrder, DistPair>
-                    // Where distPair contains the cluster center and distance to the cluster center+
-                    Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> partitionedMap = new HashMap<>();
-                    for (Dataset sto : clustered) {
-                        List<SimplifiedTMSOrder> pointsInCluster = new ArrayList<>();
-                        for (Instance ii : sto)
-                            pointsInCluster.add(new SimplifiedTMSOrder((TMSOrderLabel) ii.classValue(),
-                                    new LatLon(ii.value(0), ii.value(1))));
-                        SimplifiedTMSOrder clusterCenterReal = electCentroid(pointsInCluster);
-                        centroids.add(clusterCenterReal);
-                        partitionedMap.put(clusterCenterReal, pointsInCluster);
-                    }
+            // Stores such pairs: <SimplifiedTMSOrder, DistPair>
+            // Where distPair contains the cluster center and distance to the cluster center+
+            Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> partitionedMap = new HashMap<>();
+            for (Dataset sto : clustered) {
+                List<SimplifiedTMSOrder> pointsInCluster = new ArrayList<>();
+                for (Instance ii : sto)
+                    pointsInCluster.add(new SimplifiedTMSOrder((TMSOrderLabel) ii.classValue(),
+                            new LatLon(ii.value(0), ii.value(1))));
+                SimplifiedTMSOrder clusterCenterReal = electCentroid(pointsInCluster);
+                centroids.add(clusterCenterReal);
+                partitionedMap.put(clusterCenterReal, pointsInCluster);
+            }
 
-                    final Map<SimplifiedTMSOrder, DistPair> closestDistMap = new HashMap<>();
-                    // Above: got k cluster centers by using kmeans++
-                    // Below: start assigning points to clusters. Put minDistance into map.
-                    for (SimplifiedTMSOrder groupingKey : centroids) {
-                        for (SimplifiedTMSOrder orderPt : partitionedMap.get(groupingKey)) {
-                            closestDistMap.put(orderPt, new DistPair(groupingKey, DropoffPointsDistanceMeasure.measurePoint(
-                                    groupingKey.getLatlon(), orderPt.getLatlon())));
-                        }
-                    }
-
-                    // Sort all tms orders based on their distance to the closest centroid
-                    List<SimplifiedTMSOrder> orderedTMS = new ArrayList<>(closestDistMap.keySet());
-
-                    // TODO this is the new model
-                    System.out.println("Before " + System.currentTimeMillis());
-                    partitionedMap = reallocatePoints(closestDistMap, orderedTMS, mediumSize, centroids);
-                    System.out.println("After " + System.currentTimeMillis());
-                    clusteredMaps.add(partitionedMap);
-                    System.out.println("Iteration Finished!!! " + iterationConstant[0]);
-                    iterationConstant[0]++;
+            final Map<SimplifiedTMSOrder, DistPair> closestDistMap = new HashMap<>();
+            // Above: got k cluster centers by using kmeans++
+            // Below: start assigning points to clusters. Put minDistance into map.
+            for (SimplifiedTMSOrder groupingKey : centroids) {
+                for (SimplifiedTMSOrder orderPt : partitionedMap.get(groupingKey)) {
+                    closestDistMap.put(orderPt, new DistPair(groupingKey, DropoffPointsDistanceMeasure.measurePoint(
+                            groupingKey.getLatlon(), orderPt.getLatlon())));
                 }
-            });
+            }
 
-            workerThread.start();
-            threadPool.add(workerThread);
+            // Sort all tms orders based on their distance to the closest centroid
+            List<SimplifiedTMSOrder> orderedTMS = new ArrayList<>(closestDistMap.keySet());
+
+            // TODO this is the new model
+            System.out.println("Before " + System.currentTimeMillis());
+            partitionedMap = reallocatePoints(closestDistMap, orderedTMS, mediumSize, centroids);
+            System.out.println("After " + System.currentTimeMillis());
+            clusteredMaps.add(partitionedMap);
+            System.out.println("Iteration Finished!!! " + iterationConstant[0]);
+            iterationConstant[0]++;
         }
+//            });
+//
+//            workerThread.start();
+//            threadPool.add(workerThread);
+//        }
 
         for (Thread th : threadPool) {
             try {
@@ -204,16 +239,34 @@ public class RoutePlanningService {
             }
         }
 
+        Map<Integer, Integer> spMap = new HashMap<>();
+        // TODO need to cache results
         Collections.sort(clusteredMaps, new Comparator<Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>>>() {
 
             @Override
             public int compare(Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> o1,
                                Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> o2) {
-                List<List<SwapProposal>> o1Proposals = generateListSwapProposal(new ArrayList<>(o1.keySet()), o1);
-                List<List<SwapProposal>> o2Proposals = generateListSwapProposal(new ArrayList<>(o2.keySet()), o2);
-                if (o2Proposals.size() > o1Proposals.size())
+                int o1SPSize = 0;
+                int o2SPSize = 0;
+                if (spMap.containsKey(o1.hashCode())) {
+                    o1SPSize = spMap.get(o1.hashCode());
+                } else {
+                    List<List<SwapProposal>> o1Proposals = generateListSwapProposal(new ArrayList<>(o1.keySet()), o1);
+                    o1SPSize = o1Proposals.size();
+                    spMap.put(o1.hashCode(), o1SPSize);
+                }
+
+                if (spMap.containsKey(o2.hashCode())) {
+                    o2SPSize = spMap.get(o2.hashCode());
+                } else {
+                    List<List<SwapProposal>> o2Proposals = generateListSwapProposal(new ArrayList<>(o2.keySet()), o2);
+                    o2SPSize = o2Proposals.size();
+                    spMap.put(o2.hashCode(), o2SPSize);
+                }
+
+                if (o2SPSize > o1SPSize)
                     return -1;
-                if (o1Proposals.size() > o2Proposals.size())
+                if (o1SPSize > o2SPSize)
                     return 1;
                 return 0;
             }
@@ -224,7 +277,7 @@ public class RoutePlanningService {
         List<List<SimplifiedTMSOrder>> iteratedBest = null;
         for (int goodClustersIndex = 0; goodClustersIndex < 100; goodClustersIndex++) {
             Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> curEvaluating = clusteredMaps.get(goodClustersIndex);
-            // Above： Finishing initialization
+            // Above锛� Finishing initialization
 
             List<List<SimplifiedTMSOrder>> intermediateResult = new ArrayList<>();
             for (SimplifiedTMSOrder orderSetKey : curEvaluating.keySet()) {
@@ -241,6 +294,7 @@ public class RoutePlanningService {
         }
 
         System.out.println("Total number of swap proposals existing in best solution: " + getNumSwapProposals(iteratedBest));
+        saveClustersToFile(iteratedBest);
         return iteratedBest;
     }
 
@@ -765,17 +819,6 @@ public class RoutePlanningService {
         return new DistPair(closest, minDistance);
     }
 
-//    public void populateFences() {
-//        // TODO: get all fences using api
-//        if (!fences.isEmpty())
-//            return;
-//        List<GeoFence> allFences = geoFenceDao.getAllFences();
-//        for (GeoFence gff : allFences) {
-//            GeoPolygon polygon = new GeoPolygon(gff);
-//            fences.add(polygon);
-//        }
-//    }
-
     public static List<BasePoint> populateBasePoints() {
         List<BasePoint> returnVal = new ArrayList<>();
         String bpURLStr = "http://localhost:8080/tms/routePlanningController.do?allBP";
@@ -879,8 +922,8 @@ public class RoutePlanningService {
 
     private TMSRoutePlan doGA(List<SimplifiedTMSOrder> allDropoffPoints, final int minTour, final int maxTour) throws InterruptedException {
         // Set initial capacity to population size in order to do less resize
-        final List<TMSRoutePlan> population = new ArrayList<TMSRoutePlan>(populationSize);
-        final List<TMSRoutePlan> tempPopulation = new ArrayList<TMSRoutePlan>(populationSize * methodCount);
+        final List<TMSRoutePlan> population = new ArrayList<>(populationSize);
+        final List<TMSRoutePlan> tempPopulation = new ArrayList<>(populationSize * methodCount);
         long globalMin = Long.MAX_VALUE;
         TMSRoutePlan optimalPlan = null;
         int numDestinations = allDropoffPoints.size();
@@ -889,9 +932,9 @@ public class RoutePlanningService {
         for (int i = 0; i < populationSize; i++) {
             TMSRoutePlan candidate;
             if (bundled.isEmpty())
-                candidate = new TMSRoutePlan(allDropoffPoints, new ArrayList<Integer>(), minTour, maxTour);
+                candidate = new TMSRoutePlan(allDropoffPoints, new ArrayList<>(), minTour, maxTour);
             else
-                candidate = new TMSRoutePlan(allDropoffPoints, new ArrayList<Integer>(), bundled, minTour, maxTour);
+                candidate = new TMSRoutePlan(allDropoffPoints, new ArrayList<>(), bundled, minTour, maxTour);
             if (candidate.hasBundles())
                 candidate.randomBreaksWithBundle();
             else
@@ -978,8 +1021,8 @@ public class RoutePlanningService {
                     final List<Integer> curBreak = curRP.getBreaks();
                     tempPopulation.add(curRP);
                     // Slide
-                    ArrayList<SimplifiedTMSOrder> tempSPForSliding = new ArrayList<SimplifiedTMSOrder>();
-                    ArrayList<Integer> tempBreaksForSliding = new ArrayList<Integer>();
+                    ArrayList<SimplifiedTMSOrder> tempSPForSliding = new ArrayList<>();
+                    ArrayList<Integer> tempBreaksForSliding = new ArrayList<>();
                     tempSPForSliding.addAll(curPopSP);
                     tempBreaksForSliding.addAll(curBreak);
                     for (int index = firstInsertionPoint + 1; index <= secondInsertionPoint; index++) {
@@ -1002,11 +1045,11 @@ public class RoutePlanningService {
                     ArrayList<SimplifiedTMSOrder> tempSPForMB = new ArrayList<SimplifiedTMSOrder>();
                     tempSPForMB.addAll(curPopSP);
                     if (bundled.isEmpty()) {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForMB, new ArrayList<Integer>(), minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForMB, new ArrayList<>(), minTour, maxTour);
                         MBCandidate.randomBreaks();
                         tempPopulation.add(MBCandidate);
                     } else {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForMB, new ArrayList<Integer>(), bundled, minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForMB, new ArrayList<>(), bundled, minTour, maxTour);
                         MBCandidate.randomBreaksWithBundle();
                         tempPopulation.add(MBCandidate);
                     }
@@ -1021,7 +1064,7 @@ public class RoutePlanningService {
                     tempPopulation.add(curRP);
                     // Flip & Modify breaks
                     ArrayList<SimplifiedTMSOrder> tempSPForFlipping = new ArrayList<SimplifiedTMSOrder>();
-                    ArrayList<Integer> tempBreaksForFlipping = new ArrayList<Integer>();
+                    ArrayList<Integer> tempBreaksForFlipping = new ArrayList<>();
                     tempSPForFlipping.addAll(curPopSP);
                     tempBreaksForFlipping.addAll(curBreak);
                     for (int index = firstInsertionPoint; index <= secondInsertionPoint; index++) {
@@ -1047,18 +1090,18 @@ public class RoutePlanningService {
                     final List<Integer> curBreak = curRP.getBreaks();
                     tempPopulation.add(curRP);
                     // Swap & Modify breaks
-                    ArrayList<SimplifiedTMSOrder> tempSPForSwapping = new ArrayList<SimplifiedTMSOrder>();
-                    ArrayList<Integer> tempBreaksForSwapping = new ArrayList<Integer>();
+                    ArrayList<SimplifiedTMSOrder> tempSPForSwapping = new ArrayList<>();
+                    ArrayList<Integer> tempBreaksForSwapping = new ArrayList<>();
                     tempSPForSwapping.addAll(curPopSP);
                     tempBreaksForSwapping.addAll(curBreak);
                     tempSPForSwapping.set(firstInsertionPoint, curPopSP.get(secondInsertionPoint));
                     tempSPForSwapping.set(secondInsertionPoint, curPopSP.get(firstInsertionPoint));
                     if (bundled.isEmpty()) {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSwapping, new ArrayList<Integer>(), minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSwapping, new ArrayList<>(), minTour, maxTour);
                         MBCandidate.randomBreaks();
                         tempPopulation.add(MBCandidate);
                     } else {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSwapping, new ArrayList<Integer>(), bundled, minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSwapping, new ArrayList<>(), bundled, minTour, maxTour);
                         MBCandidate.randomBreaksWithBundle();
                         tempPopulation.add(MBCandidate);
                     }
@@ -1072,8 +1115,8 @@ public class RoutePlanningService {
                     final List<Integer> curBreak = curRP.getBreaks();
                     tempPopulation.add(curRP);
                     // Slide & Modify breaks
-                    ArrayList<SimplifiedTMSOrder> tempSPForSliding = new ArrayList<SimplifiedTMSOrder>();
-                    ArrayList<Integer> tempBreaksForSliding = new ArrayList<Integer>();
+                    ArrayList<SimplifiedTMSOrder> tempSPForSliding = new ArrayList<>();
+                    ArrayList<Integer> tempBreaksForSliding = new ArrayList<>();
                     tempSPForSliding.addAll(curPopSP);
                     tempBreaksForSliding.addAll(curBreak);
                     for (int index = firstInsertionPoint + 1; index <= secondInsertionPoint; index++) {
@@ -1081,11 +1124,11 @@ public class RoutePlanningService {
                     }
                     tempSPForSliding.set(firstInsertionPoint, curPopSP.get(secondInsertionPoint));
                     if (bundled.isEmpty()) {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSliding, new ArrayList<Integer>(), minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSliding, new ArrayList<>(), minTour, maxTour);
                         MBCandidate.randomBreaks();
                         tempPopulation.add(MBCandidate);
                     } else {
-                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSliding, new ArrayList<Integer>(), bundled, minTour, maxTour);
+                        TMSRoutePlan MBCandidate = new TMSRoutePlan(tempSPForSliding, new ArrayList<>(), bundled, minTour, maxTour);
                         MBCandidate.randomBreaksWithBundle();
                         tempPopulation.add(MBCandidate);
                     }
@@ -1153,30 +1196,6 @@ public class RoutePlanningService {
         }
 
         return 0;
-    }
-
-    /**
-     * @Title: getAllDropoffPoints
-     * @Description: ()
-     */
-    public List<SimplifiedTMSOrder> getAllDropoffPoints() {
-        return allDropoffPoints;
-    }
-
-    /**
-     * @Title: setAllDropoffPoints
-     * @Description: ()
-     */
-    public void setAllDropoffPoints(List<SimplifiedTMSOrder> allDropoffPoints) {
-        this.allDropoffPoints = allDropoffPoints;
-    }
-
-    public List<List<SimplifiedTMSOrder>> getBundled() {
-        return bundled;
-    }
-
-    public void setBundled(List<List<SimplifiedTMSOrder>> bundled) {
-        this.bundled = bundled;
     }
 
     private static class DistPair {

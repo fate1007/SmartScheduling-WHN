@@ -16,6 +16,7 @@ public class DropoffPointsDistanceMeasure implements DistanceMeasure {
     private static final long serialVersionUID = 8795527049101845368L;
     private static boolean USE_DRIVING_DIST = false;
     private static boolean USE_STRICT_MATH = true;
+    private static boolean NEVER_USE_SERVER_UNLESS_TOLD_TO = true;
 
     @Override
     public boolean compare(double arg0, double arg1) {
@@ -84,6 +85,7 @@ public class DropoffPointsDistanceMeasure implements DistanceMeasure {
     }
 
     public static void enableServerAccess() {
-        USE_DRIVING_DIST = true;
+        if (!NEVER_USE_SERVER_UNLESS_TOLD_TO)
+            USE_DRIVING_DIST = true;
     }
 }

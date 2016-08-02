@@ -18,6 +18,7 @@ public class MainServer {
         HttpServer httpServer = HttpServer.create(address, 0);
         httpServer.createContext("/", new HomePageHandler());
         httpServer.createContext("/loadBalancing", new BalancingHandler());
+        httpServer.createContext("/assembleRoutes", new RouteAssemblyHandler());
         httpServer.setExecutor(Executors.newCachedThreadPool());
         httpServer.start();
     }

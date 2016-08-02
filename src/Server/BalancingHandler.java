@@ -58,33 +58,36 @@ public class BalancingHandler implements HttpHandler {
             }
         }
 
+        allOrders = FileUtil.loadSamplePointsFromFile();
         ConversionTest.testCoordinateConversion(allOrders);
         FileUtil.exportDistanceMatrix(allOrders);
         RoutePlanningService rp = new RoutePlanningService(allOrders);
-        TMSRoutePlan optimal = rp.getOptimalPlan(minTour, maxTour);
+        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour);
         JSONObject returningObject = new JSONObject();
-        JSONArray planBreaksArr = new JSONArray();
-        JSONArray planPointsArr = new JSONArray();
-        for (int ii = 0; ii < optimal.getBreaks().size(); ii++) {
-            planBreaksArr.put(optimal.getBreaks().get(ii));
-        }
-
-        for (int jj = 0; jj < optimal.getPoints().size(); jj++) {
-            SimplifiedTMSOrder curOrder = optimal.getPoints().get(jj);
-            JSONObject singleOrderObj = new JSONObject();
-            singleOrderObj.put("latitude", curOrder.getLatlon().getLat());
-            singleOrderObj.put("longitude", curOrder.getLatlon().getLon());
-            singleOrderObj.put("orderAddr", curOrder.getOrderLabel().getOrderAddr());
-            singleOrderObj.put("orderCode", curOrder.getOrderLabel().getOrderNumber());
-            planPointsArr.put(singleOrderObj);
-        }
-        returningObject.put("planBreaks", planBreaksArr);
-        returningObject.put("dropoffPoints", planPointsArr);
+//        JSONArray planBreaksArr = new JSONArray();
+//        JSONArray planPointsArr = new JSONArray();
+//        for (int ii = 0; ii < optimal.getBreaks().size(); ii++) {
+//            planBreaksArr.put(optimal.getBreaks().get(ii));
+//        }
+//
+//        for (int jj = 0; jj < optimal.getPoints().size(); jj++) {
+//            SimplifiedTMSOrder curOrder = optimal.getPoints().get(jj);
+//            JSONObject singleOrderObj = new JSONObject();
+//            singleOrderObj.put("latitude", curOrder.getLatlon().getLat());
+//            singleOrderObj.put("longitude", curOrder.getLatlon().getLon());
+//            singleOrderObj.put("orderAddr", curOrder.getOrderLabel().getOrderAddr());
+//            singleOrderObj.put("orderCode", curOrder.getOrderLabel().getOrderNumber());
+//            planPointsArr.put(singleOrderObj);
+//        }
+//        returningObject.put("planBreaks", planBreaksArr);
+        returningObject.put("dropoffPoints", optimal);
+        returningObject.put("distances", RoutePlanningService.getDistances(optimal));
 
         String returningString = returningObject.toString(4);
         httpExchange.sendResponseHeaders(200, returningString.getBytes("UTF-8").length);
         httpExchange.getResponseBody().write(returningString.getBytes());
         httpExchange.getResponseBody().close();
+        System.out.println(returningString);
         System.out.println("Load Balancing Server Running!");
     }
 

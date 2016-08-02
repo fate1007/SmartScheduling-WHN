@@ -16,7 +16,7 @@ public class TMSRoutePlan {
     public static final String depotAddr = "上海市普陀区柳园路599号";
     public static final String depotLatitude = "31.301759";
     public static final String depotLongitude = "121.348674";
-    public static final SimplifiedTMSOrder depotLocation = new SimplifiedTMSOrder(new TMSOrderLabel(null, depotAddr),
+    public static final SimplifiedTMSOrder depotLocation = new SimplifiedTMSOrder(new TMSOrderLabel("19940814", depotAddr),
             new LatLon(Double.parseDouble(depotLatitude), Double.parseDouble(depotLongitude)));
     private int minTour = 3;
     private int maxTour = 7;
