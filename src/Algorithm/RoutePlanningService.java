@@ -51,7 +51,10 @@ public class RoutePlanningService {
             "kYz0CtG6dT4WjVK0Pnh8oLrGtKHs9GAK",
             "Kw9PkY6v44LQFo9DIokOIWXMQN9rG95d");
 
-    public List<List<SimplifiedTMSOrder>> getOptimalPlan(int minTour, int maxTour) {
+    public List<List<SimplifiedTMSOrder>> getOptimalPlan(int minTour, int maxTour, boolean heaviness,
+                                                         SimplifiedTMSOrder customizedDepot) {
+        TMSRoutePlan.restoreDepot();
+        TMSRoutePlan.configureDepot(customizedDepot);
         try {
             double mediumSize = (double) (minTour + maxTour) / 2.0;
             // TODO still have bugs
@@ -63,7 +66,7 @@ public class RoutePlanningService {
 
             PerformanceMonitor.startRunningGA();
             for (List<SimplifiedTMSOrder> singleCluster : clusteredPoints) {
-                TMSRoutePlan optimal = doGA(singleCluster, singleCluster.size(), singleCluster.size());
+                TMSRoutePlan optimal = doGA(singleCluster, singleCluster.size(), singleCluster.size(), heaviness, false);
                 optimalCandidates.add(optimal);
                 System.out.println("GA procedure finished; optimal plan cost: " + optimal.getRealTotalCost());
             }
@@ -174,7 +177,7 @@ public class RoutePlanningService {
         final int mediumSize = (int) Math.ceil((double) pts.size() / (double) numClusters);
         final Dataset pointsSet = new DefaultDataset();
         KMeans clusterer_ = new KMeans(numClusters, 10000);
-        final KMedoids clusterer = new KMedoids(numClusters, 800, new DropoffPointsDistanceMeasure());
+//        final KMedoids clusterer = new KMedoids(numClusters, 800, new DropoffPointsDistanceMeasure());
         for (SimplifiedTMSOrder stmso : pts) {
             pointsSet.add(new DenseInstance(new double[]{stmso.getLatlon().getLat(), stmso.getLatlon().getLon()},
                     stmso.getOrderLabel()));
@@ -920,7 +923,8 @@ public class RoutePlanningService {
         bpMap = retVal;
     }
 
-    private TMSRoutePlan doGA(List<SimplifiedTMSOrder> allDropoffPoints, final int minTour, final int maxTour) throws InterruptedException {
+    private TMSRoutePlan doGA(List<SimplifiedTMSOrder> allDropoffPoints, final int minTour, final int maxTour, boolean heaviness,
+                              boolean considerReturning) throws InterruptedException {
         // Set initial capacity to population size in order to do less resize
         final List<TMSRoutePlan> population = new ArrayList<>(populationSize);
         final List<TMSRoutePlan> tempPopulation = new ArrayList<>(populationSize * methodCount);
@@ -949,8 +953,12 @@ public class RoutePlanningService {
         if (allDropoffPoints.size() < 2)
             return population.isEmpty() ? null : population.get(0);
 
+        int loopIterationCount = 1000;
+        if (!heaviness)
+            loopIterationCount = allDropoffPoints.size() * allDropoffPoints.size();
+
         // TODO change this
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < loopIterationCount; i++) {
             long iterationMin = Long.MAX_VALUE;
             tempPopulation.clear();
             int firstInsertionPointInit = new Random().nextInt(numDestinations);
@@ -1159,7 +1167,13 @@ public class RoutePlanningService {
                 // Whether or not to choose the max (MAY CHOOSE MAX WITH SOME PROBABILITY)
                 for (int subIndex = 0; subIndex < methodCount; subIndex++) {
                     TMSRoutePlan curTMSPlanToEvaluate = tempPopulation.get(split * methodCount + subIndex);
-                    int curCost = curTMSPlanToEvaluate.getTotalCost();
+                    int curCost = 0;
+                    if (TMSRoutePlan.depotLatitude.equals(TMSRoutePlan.depotLatitudePerm) &&
+                            TMSRoutePlan.depotLongitude.equals(TMSRoutePlan.depotLongitudePerm)) {
+                        curCost = curTMSPlanToEvaluate.getRealTotalCost();
+                    } else {
+                        curCost = curTMSPlanToEvaluate.getTotalCostWithCustDepot(TMSRoutePlan.depotLocation);
+                    }
                     if (curCost < curMinCost) {
                         curMinCost = curCost;
                         curMinCostIndex = subIndex;

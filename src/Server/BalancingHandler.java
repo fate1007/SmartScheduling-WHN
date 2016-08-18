@@ -36,8 +36,18 @@ public class BalancingHandler implements HttpHandler {
             return;
         }
 
+        SimplifiedTMSOrder customizedDepot = null;
         String requestParams = httpExchange.getRequestURI().getQuery();
         Map<String, String> requestMapping = queryToMap(requestParams);
+
+        String customerDepot = requestMapping.get("customerDepot");
+        if (customerDepot != null) {
+            System.out.println("Customer depot provided, order number " + customerDepot);
+            String[] keys = customerDepot.split(";");
+            LatLon custDepotLL = new LatLon(keys[0], keys[1]);
+            customizedDepot = new SimplifiedTMSOrder(new TMSOrderLabel("00000000", "heheda"), custDepotLL);
+        }
+
         int minTour = Integer.parseInt(requestMapping.get("minTour"));
         int maxTour = Integer.parseInt(requestMapping.get("maxTour"));
         String dropoffPointsJson = requestMapping.get("points");
@@ -49,20 +59,21 @@ public class BalancingHandler implements HttpHandler {
             try {
                 SimplifiedTMSOrder currentOrder = new SimplifiedTMSOrder(new TMSOrderLabel(
                         singleOrder.getString("orderNumber"), singleOrder.getString("addr")),
-                        new LatLon(Double.parseDouble(singleOrder.getString("latitude")),
-                                Double.parseDouble(singleOrder.getString("longitude"))));
+                        new LatLon(singleOrder.getDouble("latitude"), singleOrder.getDouble("longitude")));
+
                 allOrders.add(currentOrder);
             } catch (JSONException ee) {
+                ee.printStackTrace();
                 System.out.println("Malformed order!!!");
                 continue;
             }
         }
 
-        allOrders = FileUtil.loadSamplePointsFromFile();
+//        allOrders = FileUtil.loadSamplePointsFromFile();
         ConversionTest.testCoordinateConversion(allOrders);
         FileUtil.exportDistanceMatrix(allOrders);
         RoutePlanningService rp = new RoutePlanningService(allOrders);
-        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour);
+        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, customizedDepot);
         JSONObject returningObject = new JSONObject();
 //        JSONArray planBreaksArr = new JSONArray();
 //        JSONArray planPointsArr = new JSONArray();

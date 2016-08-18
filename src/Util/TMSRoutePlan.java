@@ -14,9 +14,15 @@ public class TMSRoutePlan {
     private static int crossFenceCost = 7;
     private static int intoFenceCost = 12;
     public static final String depotAddr = "上海市普陀区柳园路599号";
-    public static final String depotLatitude = "31.301759";
-    public static final String depotLongitude = "121.348674";
-    public static final SimplifiedTMSOrder depotLocation = new SimplifiedTMSOrder(new TMSOrderLabel("19940814", depotAddr),
+    public static final String depotLatitudePerm = "31.301759";
+    public static final String depotLongitudePerm = "121.348674";
+    public static SimplifiedTMSOrder depotLocationPerm = new SimplifiedTMSOrder(new TMSOrderLabel("19940814", depotAddr),
+            new LatLon(Double.parseDouble(depotLatitudePerm), Double.parseDouble(depotLongitudePerm)));
+
+    // 121.220891,31.358725
+    public static String depotLatitude = "31.358725";
+    public static String depotLongitude = "121.220891";
+    public static SimplifiedTMSOrder depotLocation = new SimplifiedTMSOrder(new TMSOrderLabel("19940814", depotAddr),
             new LatLon(Double.parseDouble(depotLatitude), Double.parseDouble(depotLongitude)));
     private int minTour = 3;
     private int maxTour = 7;
@@ -39,6 +45,20 @@ public class TMSRoutePlan {
             numCars = maxCars;
         else
             numCars = minCars + new Random().nextInt(maxCars - minCars + 1);
+    }
+
+    public static void restoreDepot() {
+        depotLongitude = depotLongitudePerm;
+        depotLatitude = depotLatitudePerm;
+        depotLocation = depotLocationPerm;
+    }
+
+    public static void configureDepot(SimplifiedTMSOrder customDepot) {
+        if (customDepot == null)
+            return;
+        depotLatitude = String.valueOf(customDepot.getLatlon().getLat());
+        depotLongitude = String.valueOf(customDepot.getLatlon().getLon());
+        depotLocation = customDepot;
     }
 
     public TMSRoutePlan(List<SimplifiedTMSOrder> points, List<Integer> breaks, int minTour, int maxTour) {
@@ -72,15 +92,15 @@ public class TMSRoutePlan {
         return extraSum;
     }
 
-    private int getTotalCost(boolean plusOffset) {
+    private int getTotalCostWithStartDest(SimplifiedTMSOrder origin, SimplifiedTMSOrder destination, boolean plusOffset) {
         Collections.sort(getBreaks());
         int sum = 0;
         int lastBreak = 0;
         int lastFenceID = 0;
         int fenceOffset = 0;
         for (int i = 0; i < getBreaks().size(); i++) {
-            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(lastBreak), depotLocation);
-            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(breaks.get(i) - 1), depotLocation);
+            sum += DropoffPointsDistanceMeasure.measurePoint(origin, getPoints().get(lastBreak));
+            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(breaks.get(i) - 1), destination);
             lastFenceID = RoutePlanningService.getFenceID(points.get(lastBreak).getLatlon());
             for (int j = lastBreak + 1; j < getBreaks().get(i); j++) {
                 sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(j), getPoints().get(j - 1));
@@ -98,8 +118,8 @@ public class TMSRoutePlan {
             lastBreak = getBreaks().get(i);
         }
 
-        sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(lastBreak), depotLocation);
-        sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(getPoints().size() - 1), depotLocation);
+        sum += DropoffPointsDistanceMeasure.measurePoint(origin, getPoints().get(lastBreak));
+        sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(getPoints().size() - 1), destination);
         for (int i = lastBreak + 1; i < getPoints().size(); i++) {
             sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(i), getPoints().get(i - 1));
         }
@@ -108,6 +128,33 @@ public class TMSRoutePlan {
             return sum + fenceOffset;
         else
             return sum;
+    }
+
+    private int getTotalCost(boolean plusOffset) {
+        return getTotalCostWithStartDest(depotLocation, depotLocation, plusOffset);
+    }
+
+    public int getTotalCostWithCustDepot(SimplifiedTMSOrder customerDepot) {
+        Collections.sort(getBreaks());
+        int sum = 0;
+        int lastBreak = 0;
+        for (int i = 0; i < getBreaks().size(); i++) {
+            sum += DropoffPointsDistanceMeasure.measurePoint(depotLocation, customerDepot);
+            sum += DropoffPointsDistanceMeasure.measurePoint(customerDepot, getPoints().get(lastBreak));
+            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(breaks.get(i) - 1), depotLocation);
+            for (int j = lastBreak + 1; j < getBreaks().get(i); j++) {
+                sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(j), getPoints().get(j - 1));
+            }
+            lastBreak = getBreaks().get(i);
+        }
+
+        sum += DropoffPointsDistanceMeasure.measurePoint(depotLocation, customerDepot);
+        sum += DropoffPointsDistanceMeasure.measurePoint(customerDepot, getPoints().get(lastBreak));
+        sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(getPoints().size() - 1), depotLocation);
+        for (int i = lastBreak + 1; i < getPoints().size(); i++) {
+            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(i), getPoints().get(i - 1));
+        }
+        return sum;
     }
 
     public int getTotalCost() {
