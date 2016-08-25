@@ -42,7 +42,7 @@ public class RouteAssemblyHandler implements HttpHandler {
         }
 
         RoutePlanningService rps = new RoutePlanningService(ordersToBalance);
-        List<List<SimplifiedTMSOrder>> balancedOrders = rps.getOptimalPlan(ordersToBalance.size(), ordersToBalance.size(), true, dtp);
+        List<List<SimplifiedTMSOrder>> balancedOrders = rps.getOptimalPlan(ordersToBalance.size(), ordersToBalance.size(), true, dtp, false);
         List<Integer> distancesReturned = RoutePlanningService.getDistances(balancedOrders);
         System.out.println("这条路线的距离是:" + distancesReturned.get(0));
         JSONObject returningObj = new JSONObject();

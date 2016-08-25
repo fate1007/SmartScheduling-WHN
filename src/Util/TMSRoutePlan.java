@@ -134,23 +134,29 @@ public class TMSRoutePlan {
         return getTotalCostWithStartDest(depotLocation, depotLocation, plusOffset);
     }
 
-    public int getTotalCostWithCustDepot(SimplifiedTMSOrder customerDepot) {
+    public int getTotalCostWithCustDepot() {
+        return getTotalCostWithCustDepot(depotLocation, true);
+    }
+
+    private int getTotalCostWithCustDepot(SimplifiedTMSOrder customerDepot, boolean considerReturning) {
         Collections.sort(getBreaks());
         int sum = 0;
         int lastBreak = 0;
         for (int i = 0; i < getBreaks().size(); i++) {
-            sum += DropoffPointsDistanceMeasure.measurePoint(depotLocation, customerDepot);
+            sum += DropoffPointsDistanceMeasure.measurePoint(depotLocationPerm, customerDepot);
             sum += DropoffPointsDistanceMeasure.measurePoint(customerDepot, getPoints().get(lastBreak));
-            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(breaks.get(i) - 1), depotLocation);
+            if (considerReturning)
+                sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(breaks.get(i) - 1), depotLocationPerm);
             for (int j = lastBreak + 1; j < getBreaks().get(i); j++) {
                 sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(j), getPoints().get(j - 1));
             }
             lastBreak = getBreaks().get(i);
         }
 
-        sum += DropoffPointsDistanceMeasure.measurePoint(depotLocation, customerDepot);
+        sum += DropoffPointsDistanceMeasure.measurePoint(depotLocationPerm, customerDepot);
         sum += DropoffPointsDistanceMeasure.measurePoint(customerDepot, getPoints().get(lastBreak));
-        sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(getPoints().size() - 1), depotLocation);
+        if (considerReturning)
+            sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(getPoints().size() - 1), depotLocationPerm);
         for (int i = lastBreak + 1; i < getPoints().size(); i++) {
             sum += DropoffPointsDistanceMeasure.measurePoint(getPoints().get(i), getPoints().get(i - 1));
         }

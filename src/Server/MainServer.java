@@ -19,6 +19,7 @@ public class MainServer {
         httpServer.createContext("/", new HomePageHandler());
         httpServer.createContext("/loadBalancing", new BalancingHandler());
         httpServer.createContext("/assembleRoutes", new RouteAssemblyHandler());
+        httpServer.createContext("/clusteringOnly", new ClusteringHandler());
         httpServer.setExecutor(Executors.newCachedThreadPool());
         httpServer.start();
     }

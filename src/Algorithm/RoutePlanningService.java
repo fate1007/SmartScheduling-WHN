@@ -52,15 +52,20 @@ public class RoutePlanningService {
             "Kw9PkY6v44LQFo9DIokOIWXMQN9rG95d");
 
     public List<List<SimplifiedTMSOrder>> getOptimalPlan(int minTour, int maxTour, boolean heaviness,
-                                                         SimplifiedTMSOrder customizedDepot) {
+                                                         SimplifiedTMSOrder customizedDepot,
+                                                         boolean clusteringOnly) {
         TMSRoutePlan.restoreDepot();
-        TMSRoutePlan.configureDepot(customizedDepot);
+        if (customizedDepot != null)
+            TMSRoutePlan.configureDepot(customizedDepot);
         try {
             double mediumSize = (double) (minTour + maxTour) / 2.0;
             // TODO still have bugs
             PerformanceMonitor.startClustering();
             List<List<SimplifiedTMSOrder>> clusteredPoints = equalCluster(allDropoffPoints,
                     (int) Math.ceil((double) allDropoffPoints.size() / mediumSize), minTour, maxTour);
+
+            if (clusteringOnly)
+                return clusteredPoints;
             PerformanceMonitor.clusteringFinished();
             List<TMSRoutePlan> optimalCandidates = new ArrayList<>();
 
@@ -220,7 +225,6 @@ public class RoutePlanningService {
             // Sort all tms orders based on their distance to the closest centroid
             List<SimplifiedTMSOrder> orderedTMS = new ArrayList<>(closestDistMap.keySet());
 
-            // TODO this is the new model
             System.out.println("Before " + System.currentTimeMillis());
             partitionedMap = reallocatePoints(closestDistMap, orderedTMS, mediumSize, centroids);
             System.out.println("After " + System.currentTimeMillis());
@@ -576,8 +580,6 @@ public class RoutePlanningService {
                     allClusters.get(curCentroid).add(lastSubject);
                 lastSubject = chainedPath_element.get(i);
                 boolean result = allClusters.get(curCentroid).remove(lastSubject);
-                if (!result)
-                    System.out.println("KABOOM!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             }
 
             allClusters.get(endCenter).add(lastSubject);
@@ -1172,7 +1174,7 @@ public class RoutePlanningService {
                             TMSRoutePlan.depotLongitude.equals(TMSRoutePlan.depotLongitudePerm)) {
                         curCost = curTMSPlanToEvaluate.getRealTotalCost();
                     } else {
-                        curCost = curTMSPlanToEvaluate.getTotalCostWithCustDepot(TMSRoutePlan.depotLocation);
+                        curCost = curTMSPlanToEvaluate.getTotalCostWithCustDepot();
                     }
                     if (curCost < curMinCost) {
                         curMinCost = curCost;

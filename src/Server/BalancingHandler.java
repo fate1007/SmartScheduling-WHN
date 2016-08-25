@@ -73,14 +73,14 @@ public class BalancingHandler implements HttpHandler {
         ConversionTest.testCoordinateConversion(allOrders);
         FileUtil.exportDistanceMatrix(allOrders);
         RoutePlanningService rp = new RoutePlanningService(allOrders);
-        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, customizedDepot);
+        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, customizedDepot, false);
         JSONObject returningObject = new JSONObject();
 //        JSONArray planBreaksArr = new JSONArray();
 //        JSONArray planPointsArr = new JSONArray();
 //        for (int ii = 0; ii < optimal.getBreaks().size(); ii++) {
 //            planBreaksArr.put(optimal.getBreaks().get(ii));
 //        }
-//
+
 //        for (int jj = 0; jj < optimal.getPoints().size(); jj++) {
 //            SimplifiedTMSOrder curOrder = optimal.getPoints().get(jj);
 //            JSONObject singleOrderObj = new JSONObject();
