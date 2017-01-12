@@ -1,11 +1,11 @@
 package Util;
 
-import Algorithm.RoutePlanningService;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+
+import Algorithm.RoutePlanningService;
 
 public class TMSRoutePlan {
     private List<SimplifiedTMSOrder> points = new ArrayList<SimplifiedTMSOrder>();
@@ -13,7 +13,7 @@ public class TMSRoutePlan {
     private List<List<SimplifiedTMSOrder>> bundles = new ArrayList<List<SimplifiedTMSOrder>>();
     private static int crossFenceCost = 7;
     private static int intoFenceCost = 12;
-    public static final String depotAddr = "上海市普陀区柳园路599号";
+	public static final String depotAddr = "jjj";
     public static final String depotLatitudePerm = "31.301759";
     public static final String depotLongitudePerm = "121.348674";
     public static SimplifiedTMSOrder depotLocationPerm = new SimplifiedTMSOrder(new TMSOrderLabel("19940814", depotAddr),

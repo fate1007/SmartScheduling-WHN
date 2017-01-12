@@ -1,21 +1,24 @@
 package Server;
 
-import Algorithm.RoutePlanningService;
-import Util.LatLon;
-import Util.SimplifiedTMSOrder;
-import Util.TMSOrderLabel;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import static Server.BalancingHandler.queryToMap;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 
-import static Server.BalancingHandler.queryToMap;
+import Algorithm.RoutePlanningService;
+import Util.LatLon;
+import Util.SimplifiedTMSOrder;
+import Util.TMSOrderLabel;
 
 /**
  * Created by Minghao Liu on 8/25/2016.
@@ -24,11 +27,23 @@ public class ClusteringHandler implements HttpHandler{
 
     @Override
     public void handle(HttpExchange httpExchange) throws IOException {
+        double speed = 40.;
+        Date departureTime = new Date();
+        boolean isVolumnLimit = false;
+        double volumnLimit = 50.;
+
         String requestParams = httpExchange.getRequestURI().getQuery();
         Map<String, String> requestMapping = queryToMap(requestParams);
 
         int minTour = Integer.parseInt(requestMapping.get("minTour"));
         int maxTour = Integer.parseInt(requestMapping.get("maxTour"));
+		// speed = Double.parseDouble(requestMapping.get("speed"));
+		// departureTime =
+		// BalancingHandler.queryToDate(requestMapping.get("departureTime"));
+		// isVolumnLimit = Boolean.valueOf(requestMapping.get("isVolumnLimit"));
+		// if(isVolumnLimit == true) {
+		// volumnLimit = Double.parseDouble(requestMapping.get("volumnLimit"));
+		// }
         String dropoffPointsJson = requestMapping.get("points");
         JSONObject allObj = new JSONObject(dropoffPointsJson);
         JSONArray ja = allObj.getJSONArray("all");
@@ -47,8 +62,10 @@ public class ClusteringHandler implements HttpHandler{
             }
         }
 
-        RoutePlanningService rp = new RoutePlanningService(allOrders);
+        RoutePlanningService rp = new RoutePlanningService(allOrders, speed, departureTime, isVolumnLimit, volumnLimit);
+		System.out.println("cluster");
         List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, null, true);
+		System.out.println("clusterover");
         JSONObject returningObject = new JSONObject();
         returningObject.put("dropoffPoints", optimal);
         returningObject.put("distances", RoutePlanningService.getDistances(optimal));

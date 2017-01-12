@@ -1,29 +1,45 @@
 package Server;
 
-import Algorithm.RoutePlanningService;
-import Core.PerformanceMonitor;
-import Test.ConversionTest;
-import Util.*;
-import com.sun.javafx.perf.PerformanceTracker;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+
+import Algorithm.RoutePlanningService;
+import Core.PerformanceMonitor;
+import Test.ConversionTest;
+import Util.FileUtil;
+import Util.LatLon;
+import Util.SimplifiedTMSOrder;
+import Util.TMSOrderLabel;
 
 /**
  * @author: Minghao Liu
  */
 public class BalancingHandler implements HttpHandler {
+
     @Override
     public void handle(HttpExchange httpExchange) throws IOException {
-        System.out.println("Request coming in!");
+        double speed = 40.;
+        String departureTime = "20160101000000";
+        boolean isVolumnLimit = false;
+        double volumnLimit = 40.;
+
+		System.out.println("Request balancing coming in!");
 //        if (!httpExchange.getRequestMethod().equalsIgnoreCase("POST")) {
 //            ServerUtil.page404(httpExchange);
 //            return;
@@ -38,6 +54,7 @@ public class BalancingHandler implements HttpHandler {
 
         SimplifiedTMSOrder customizedDepot = null;
         String requestParams = httpExchange.getRequestURI().getQuery();
+		// System.out.println(requestParams);
         Map<String, String> requestMapping = queryToMap(requestParams);
 
         String customerDepot = requestMapping.get("customerDepot");
@@ -50,6 +67,12 @@ public class BalancingHandler implements HttpHandler {
 
         int minTour = Integer.parseInt(requestMapping.get("minTour"));
         int maxTour = Integer.parseInt(requestMapping.get("maxTour"));
+		// speed = Double.parseDouble(requestMapping.get("speed"));
+		// departureTime = requestMapping.get("departureTime");
+		// isVolumnLimit = Boolean.valueOf(requestMapping.get("isVolumnLimit"));
+		// if(isVolumnLimit == true) {
+		// volumnLimit = Double.parseDouble(requestMapping.get("volumnLimit"));
+		// }
         String dropoffPointsJson = requestMapping.get("points");
         JSONObject allObj = new JSONObject(dropoffPointsJson);
         JSONArray ja = allObj.getJSONArray("all");
@@ -72,7 +95,7 @@ public class BalancingHandler implements HttpHandler {
 //        allOrders = FileUtil.loadSamplePointsFromFile();
         ConversionTest.testCoordinateConversion(allOrders);
         FileUtil.exportDistanceMatrix(allOrders);
-        RoutePlanningService rp = new RoutePlanningService(allOrders);
+        RoutePlanningService rp = new RoutePlanningService(allOrders, speed, queryToDate(departureTime), isVolumnLimit, volumnLimit);
         List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, customizedDepot, false);
         JSONObject returningObject = new JSONObject();
 //        JSONArray planBreaksArr = new JSONArray();
@@ -102,6 +125,24 @@ public class BalancingHandler implements HttpHandler {
         System.out.println("Load Balancing Server Running!");
     }
 
+    //get temp points
+    private void getPoints(List<SimplifiedTMSOrder> allOrders) {
+        try {
+			File f = new File("points.txt");
+            InputStreamReader read = new InputStreamReader(new FileInputStream(f));
+            BufferedReader br = new BufferedReader(read);
+            String line = null;
+			while ((line = br.readLine()) != null) {
+				String[] attrs = line.split("\t");
+                SimplifiedTMSOrder stms = new SimplifiedTMSOrder(new TMSOrderLabel(
+                        attrs[0], attrs[1]), new LatLon(attrs[3], attrs[4]));
+                allOrders.add(stms);
+            }
+            read.close();
+        }
+        catch(Exception e){}
+    }
+
     public static Map<String, String> queryToMap(String query) {
         Map<String, String> result = new HashMap<>();
         for (String param : query.split("&")) {
@@ -113,5 +154,16 @@ public class BalancingHandler implements HttpHandler {
             }
         }
         return result;
+    }
+
+    public static Date queryToDate(String departureTime) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmm");
+        Date date = null;
+        try {
+            date = sdf.parse(departureTime);
+        } catch(Exception e){
+            date = new Date();
+        }
+        return date;
     }
 }

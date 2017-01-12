@@ -116,7 +116,7 @@ public class GeoPolygon {
     public int getLayer() {
         return layer;
     }
-
+    
     public int getOrder() {
         return order;
     }

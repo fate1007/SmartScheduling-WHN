@@ -1,0 +1,55 @@
+package Util;
+
+public class TMSOrderLabel implements Comparable<TMSOrderLabel> {
+    private String orderNumber;
+    private String orderAddr;
+
+    public TMSOrderLabel(String orderNumber, String orderAddr) {
+        this.orderAddr = orderAddr;
+        this.orderNumber = orderNumber;
+    }
+
+    public String getOrderNumber() {
+        return orderNumber;
+    }
+
+    public String getOrderAddr() {
+        return orderAddr;
+    }
+
+    @Override
+    public int compareTo(TMSOrderLabel o) {
+        int thisNum = Integer.parseInt(orderNumber);
+        int otherNum = Integer.parseInt(o.orderNumber);
+        if (thisNum > otherNum)
+            return 1;
+        else if (thisNum == otherNum)
+            return 0;
+        return -1;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((orderNumber == null) ? 0 : orderNumber.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        TMSOrderLabel other = (TMSOrderLabel) obj;
+        if (orderNumber == null) {
+            if (other.orderNumber != null)
+                return false;
+        } else if (!orderNumber.equals(other.orderNumber))
+            return false;
+        return true;
+    }
+}

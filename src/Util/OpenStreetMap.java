@@ -1,8 +1,5 @@
 package Util;
 
-import Test.ConversionTest;
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -14,15 +11,18 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
+import org.json.JSONObject;
+
+/**shMap<>();
+    
  * OpenStreetMap utilities
  * @author Kelvin Liu
  *
  */
 public class OpenStreetMap {
     private static final String osmRoutePlanningAPI = "http://localhost:8989/route?point=%.6f,%.6f&point=%.6f,%.6f&calc_points=false";
-    private static Map<StartOriginPair, Integer> distanceMap = new HashMap<>();
-    private static Set<LatLon> llSet = new HashSet<>();
+	private static Map<StartOriginPair, Integer> distanceMap = new HashMap<>();
+	private static Set<LatLon> LLSet = new HashSet<>();
 
     public static final int getDrivingDistance(LatLon origin, LatLon destination) throws Exception {
         StartOriginPair sop = new StartOriginPair(origin, destination);
@@ -37,8 +37,8 @@ public class OpenStreetMap {
 ////            System.out.println(String.format("Fuck!!! %s, %s", destination.getLat(), destination.getLon()));
 ////            new Exception().printStackTrace();
 //        }
-        llSet.add(origin);
-        llSet.add(destination);
+		LLSet.add(origin);
+		LLSet.add(destination);
 
         URL queryURL = new URL(String.format(osmRoutePlanningAPI, origin.getLat(), origin.getLon(), destination.getLat(),
                 destination.getLon()));
@@ -56,11 +56,13 @@ public class OpenStreetMap {
         synchronized (distanceMap) {
             distanceMap.put(new StartOriginPair(origin, destination), finalReturningDist);
         }
-        if (distanceMap.size() % 1000 == 0) {
-            System.out.println("Distance map's size is: " + distanceMap.size());
-            System.out.println("LatLon Set size is: " + llSet.size());
-        }
-        return finalReturningDist;
+		if (distanceMap.size() % 1000 == 0) {
+			int temp = LLSet.size();
+			System.out.println("Distance map's size is: " + distanceMap.size());
+			System.out.println("LatLon Set size is: " + temp);
+		}
+
+		return finalReturningDist;
     }
 
     private static class StartOriginPair {

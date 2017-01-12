@@ -1,9 +1,8 @@
 package Util;
 
+import java.io.IOException;
 
 import com.sun.net.httpserver.HttpExchange;
-
-import java.io.IOException;
 
 /**
  * Created by bml on 05/07/2016.

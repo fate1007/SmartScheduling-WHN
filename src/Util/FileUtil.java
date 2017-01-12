@@ -1,20 +1,28 @@
 package Util;
 
-import Algorithm.RoutePlanningService;
-import org.json.JSONObject;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.json.JSONObject;
+
+import Algorithm.RoutePlanningService;
+
 /**
  * Created by BML-KF on 7/14/2016.
  */
 public class FileUtil {
-    private static String filePattern = "C:\\Users\\BML-KF\\Desktop\\Algorithms\\LBResults\\LBResult_%s.json";
-    private static String clusteredFilePattern = "C:\\Users\\BML-KF\\Desktop\\Algorithms\\LBResults\\ClusteringResult_%s.json";
+	private static String filePattern = "E:\\American study life in poly\\bml\\output\\LBResult_%s.json";
+	private static String clusteredFilePattern = "E:\\American study life in poly\\bml\\output\\ClusteringResult_%s.json";
     public static void saveResultsToFile(List<List<SimplifiedTMSOrder>> finalPlan) {
         JSONObject resultObj = new JSONObject();
         resultObj.put("modifiedTime", System.currentTimeMillis());
@@ -66,7 +74,8 @@ public class FileUtil {
 
     public static void exportDistanceMatrix(List<SimplifiedTMSOrder> allOrders) {
         long currentTime = System.currentTimeMillis();
-        String fileName = "C:\\Users\\BML-KF\\Desktop\\Algorithms\\LBResults\\" + "DistanceMatrix_" + currentTime + ".lmh";
+		String fileName = "E:\\American study life in poly\\bml\\output\\" + "DistanceMatrix_" + currentTime
+				+ ".lmh";
         try {
             PrintWriter pr = new PrintWriter(fileName);
             String header = "origin/dest";
@@ -108,7 +117,8 @@ public class FileUtil {
         try {
             int labelCounter = 1;
             List<SimplifiedTMSOrder> returnVal = new ArrayList<>();
-            BufferedReader br = new BufferedReader(new FileReader("C:\\Users\\BML-KF\\Desktop\\backedUpFiles\\sample.txt"));
+			BufferedReader br = new BufferedReader(
+					new FileReader("E:\\American study life in poly\\bml\\output\\sample.txt"));
             for (String line = br.readLine(); line != null; line = br.readLine()) {
                 String[] latlons = line.split("\t");
                 LatLon latlon = new LatLon(latlons[1], latlons[0]);

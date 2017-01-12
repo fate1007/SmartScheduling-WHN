@@ -1,24 +1,44 @@
 package Algorithm;
 
+import static Util.FileUtil.saveClustersToFile;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import Core.PerformanceMonitor;
-import Util.*;
-
+import Util.BasePoint;
+import Util.DropoffPointsDistanceMeasure;
+import Util.FileUtil;
+import Util.GeoFence;
+import Util.GeoPolygon;
+import Util.LatLon;
+import Util.OpenStreetMap;
+import Util.SimplifiedTMSOrder;
+import Util.TMSOrderLabel;
+import Util.TMSRoutePlan;
 import net.sf.javaml.clustering.KMeans;
-import net.sf.javaml.clustering.KMedoids;
 import net.sf.javaml.core.Dataset;
 import net.sf.javaml.core.DefaultDataset;
 import net.sf.javaml.core.DenseInstance;
 import net.sf.javaml.core.Instance;
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import static Util.FileUtil.saveClustersToFile;
 
 /**
  * Service for load balancing and route planning.
@@ -34,13 +54,21 @@ public class RoutePlanningService {
     public static int populationSize = 256;
     public static int numGAIterations = 1000;
     private static final int methodCount = 8;
+    private double speed = 40.;
+    private Date departureTime;
+    private boolean isVolumnLimit = false;
+    private double volumnLimit = 40.;
     private List<SimplifiedTMSOrder> allDropoffPoints;
     private List<GeoFence> allFences;
     private Map<BasePoint, List<SimplifiedTMSOrder>> bpMap;
 
-    public RoutePlanningService(List<SimplifiedTMSOrder> allDropoffPoints) {
+    public RoutePlanningService(List<SimplifiedTMSOrder> allDropoffPoints, double speed, Date departureTime, boolean isVolumnLimit, double volumnLimit) {
         allFences = new ArrayList<>();
         this.allDropoffPoints = allDropoffPoints;
+        this.speed = speed;
+        this.departureTime = departureTime;
+        this.isVolumnLimit = isVolumnLimit;
+        this.volumnLimit = volumnLimit;
     }
 
     // Bundled dropoff points
@@ -54,6 +82,9 @@ public class RoutePlanningService {
     public List<List<SimplifiedTMSOrder>> getOptimalPlan(int minTour, int maxTour, boolean heaviness,
                                                          SimplifiedTMSOrder customizedDepot,
                                                          boolean clusteringOnly) {
+		Date after = new Date(departureTime.getTime() + 3600000);
+		System.out.println(departureTime);
+		System.out.println(after);
         TMSRoutePlan.restoreDepot();
         if (customizedDepot != null)
             TMSRoutePlan.configureDepot(customizedDepot);
@@ -78,13 +109,41 @@ public class RoutePlanningService {
             PerformanceMonitor.GAFinished();
 
             List<List<SimplifiedTMSOrder>> returning = new ArrayList<>();
-            for (TMSRoutePlan optRP : optimalCandidates) {
-                returning.add(optRP.getPoints());
-            }
+			for (TMSRoutePlan optRP : optimalCandidates) {
+				returning.add(optRP.getPoints());
+			}
+			System.out.printf("----------%f, %s--------\n", speed, departureTime.toString());
+            getEstimatedArrivingTimes(returning, speed, departureTime);
             FileUtil.saveResultsToFile(returning);
             return returning;
         } catch (InterruptedException e) {
             return null;
+        }
+    }
+
+    public void getEstimatedArrivingTimes(List<List<SimplifiedTMSOrder>> returning, double speed, Date departureTime) {
+        Date lastArrivingTime = departureTime;
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        LatLon last = null;
+        for(int i=0;i<returning.size();i++) {
+            List<SimplifiedTMSOrder> currentPlan = returning.get(i);
+            last = currentPlan.get(0).getLatlon();
+            for(SimplifiedTMSOrder stms : currentPlan) {
+                double distance;
+                LatLon next = stms.getLatlon();
+                try {
+                    distance = OpenStreetMap.getDrivingDistance(last, next);
+                } catch(Exception e){
+                    distance = GeoPolygon.getEarthDistance(last.getLat(),
+                        last.getLon(), next.getLat(), next.getLon()) * 1000;
+                }
+                //Cost x hours -> Date time based on millisecond
+				int cost = (int) ((distance / 1000 / speed) * 3600000);
+                Date estimatedArrivingTime = new Date(lastArrivingTime.getTime() + cost);
+                last = stms.getLatlon();
+                lastArrivingTime = estimatedArrivingTime;
+				stms.setEstimatedArrivingTime(estimatedArrivingTime.toString());
+            }
         }
     }
 
@@ -284,7 +343,7 @@ public class RoutePlanningService {
         List<List<SimplifiedTMSOrder>> iteratedBest = null;
         for (int goodClustersIndex = 0; goodClustersIndex < 100; goodClustersIndex++) {
             Map<SimplifiedTMSOrder, List<SimplifiedTMSOrder>> curEvaluating = clusteredMaps.get(goodClustersIndex);
-            // Above锛� Finishing initialization
+			// Above锛� Finishing initialization
 
             List<List<SimplifiedTMSOrder>> intermediateResult = new ArrayList<>();
             for (SimplifiedTMSOrder orderSetKey : curEvaluating.keySet()) {
@@ -731,6 +790,16 @@ public class RoutePlanningService {
             for (List<SimplifiedTMSOrder> singleCluster : orderCentroidMapping) {
                 clusteredMap.put(electCentroid(singleCluster), singleCluster);
             }
+
+            // //get center of a cluster
+            // SimplifiedTMSOrder center =  electCentroid(orderCentroidMapping.get(0));
+            // //get lat, lon of an order
+            // center.getLatlon().getLat();
+            // center.getLatlon().getLon();
+            // //get correspondance clusterList
+            // List<SimplifiedTMSOrder> clusterList = clusteredMap.get(center);
+
+
             List<SimplifiedTMSOrder> mappingCentroids = new ArrayList<>(clusteredMap.keySet());
             List<List<SwapProposal>> swpps = generateListSwapProposal(mappingCentroids, clusteredMap);
             System.out.println("Size of swap proposals is: " + swpps.size());

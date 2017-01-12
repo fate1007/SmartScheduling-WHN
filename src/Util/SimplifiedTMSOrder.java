@@ -10,6 +10,8 @@ import org.apache.commons.math3.ml.clustering.Clusterable;
 public class SimplifiedTMSOrder implements Clusterable {
     private LatLon latlon;
     private TMSOrderLabel orderLabel;
+    private String estimatedArrivingTime;
+    private double volumn;
 
     public LatLon getLatlon() {
         return latlon;
@@ -31,6 +33,14 @@ public class SimplifiedTMSOrder implements Clusterable {
     public void setOrderLabel(TMSOrderLabel orderLabel) {
         this.orderLabel = orderLabel;
     }
+
+    public void setEstimatedArrivingTime(String estimatedArrivingTime) {
+        this.estimatedArrivingTime = estimatedArrivingTime;
+    }
+
+	public String getEstimatedArrivingTime() {
+		return estimatedArrivingTime;
+	}
 
     @Override
     public double[] getPoint() {

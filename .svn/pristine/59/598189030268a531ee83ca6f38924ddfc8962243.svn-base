@@ -1,0 +1,169 @@
+package Server;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+
+import Algorithm.RoutePlanningService;
+import Core.PerformanceMonitor;
+import Test.ConversionTest;
+import Util.FileUtil;
+import Util.LatLon;
+import Util.SimplifiedTMSOrder;
+import Util.TMSOrderLabel;
+
+/**
+ * @author: Minghao Liu
+ */
+public class BalancingHandler implements HttpHandler {
+
+    @Override
+    public void handle(HttpExchange httpExchange) throws IOException {
+        double speed = 40.;
+        String departureTime = "20160101000000";
+        boolean isVolumnLimit = false;
+        double volumnLimit = 40.;
+
+		System.out.println("Request balancing coming in!");
+//        if (!httpExchange.getRequestMethod().equalsIgnoreCase("POST")) {
+//            ServerUtil.page404(httpExchange);
+//            return;
+//        }
+        if (PerformanceMonitor.getPerformanceStatus()) {
+            String returnMessage = "{\"message\": \"Load Balancing in Progress.\"}";
+            httpExchange.sendResponseHeaders(200, returnMessage.getBytes().length);
+            httpExchange.getResponseBody().write(returnMessage.getBytes());
+            httpExchange.getResponseBody().close();
+            return;
+        }
+
+        SimplifiedTMSOrder customizedDepot = null;
+        String requestParams = httpExchange.getRequestURI().getQuery();
+		// System.out.println(requestParams);
+        Map<String, String> requestMapping = queryToMap(requestParams);
+
+        String customerDepot = requestMapping.get("customerDepot");
+        if (customerDepot != null) {
+            System.out.println("Customer depot provided, order number " + customerDepot);
+            String[] keys = customerDepot.split(";");
+            LatLon custDepotLL = new LatLon(keys[0], keys[1]);
+            customizedDepot = new SimplifiedTMSOrder(new TMSOrderLabel("00000000", "heheda"), custDepotLL);
+        }
+
+        int minTour = Integer.parseInt(requestMapping.get("minTour"));
+        int maxTour = Integer.parseInt(requestMapping.get("maxTour"));
+		// speed = Double.parseDouble(requestMapping.get("speed"));
+		// departureTime = requestMapping.get("departureTime");
+		// isVolumnLimit = Boolean.valueOf(requestMapping.get("isVolumnLimit"));
+		// if(isVolumnLimit == true) {
+		// volumnLimit = Double.parseDouble(requestMapping.get("volumnLimit"));
+		// }
+        String dropoffPointsJson = requestMapping.get("points");
+        JSONObject allObj = new JSONObject(dropoffPointsJson);
+        JSONArray ja = allObj.getJSONArray("all");
+        List<SimplifiedTMSOrder> allOrders = new ArrayList<>();
+        for (int i = 0; i < ja.length(); i++) {
+            JSONObject singleOrder = ja.getJSONObject(i);
+            try {
+                SimplifiedTMSOrder currentOrder = new SimplifiedTMSOrder(new TMSOrderLabel(
+                        singleOrder.getString("orderNumber"), singleOrder.getString("addr")),
+                        new LatLon(singleOrder.getDouble("latitude"), singleOrder.getDouble("longitude")));
+
+                allOrders.add(currentOrder);
+            } catch (JSONException ee) {
+                ee.printStackTrace();
+                System.out.println("Malformed order!!!");
+                continue;
+            }
+        }
+
+//        allOrders = FileUtil.loadSamplePointsFromFile();
+        ConversionTest.testCoordinateConversion(allOrders);
+        FileUtil.exportDistanceMatrix(allOrders);
+        RoutePlanningService rp = new RoutePlanningService(allOrders, speed, queryToDate(departureTime), isVolumnLimit, volumnLimit);
+        List<List<SimplifiedTMSOrder>> optimal = rp.getOptimalPlan(minTour, maxTour, false, customizedDepot, false);
+        JSONObject returningObject = new JSONObject();
+//        JSONArray planBreaksArr = new JSONArray();
+//        JSONArray planPointsArr = new JSONArray();
+//        for (int ii = 0; ii < optimal.getBreaks().size(); ii++) {
+//            planBreaksArr.put(optimal.getBreaks().get(ii));
+//        }
+
+//        for (int jj = 0; jj < optimal.getPoints().size(); jj++) {
+//            SimplifiedTMSOrder curOrder = optimal.getPoints().get(jj);
+//            JSONObject singleOrderObj = new JSONObject();
+//            singleOrderObj.put("latitude", curOrder.getLatlon().getLat());
+//            singleOrderObj.put("longitude", curOrder.getLatlon().getLon());
+//            singleOrderObj.put("orderAddr", curOrder.getOrderLabel().getOrderAddr());
+//            singleOrderObj.put("orderCode", curOrder.getOrderLabel().getOrderNumber());
+//            planPointsArr.put(singleOrderObj);
+//        }
+//        returningObject.put("planBreaks", planBreaksArr);
+        returningObject.put("dropoffPoints", optimal);
+        returningObject.put("distances", RoutePlanningService.getDistances(optimal));
+
+        String returningString = returningObject.toString(4);
+        httpExchange.sendResponseHeaders(200, returningString.getBytes("UTF-8").length);
+        httpExchange.getResponseBody().write(returningString.getBytes());
+        httpExchange.getResponseBody().close();
+        System.out.println(returningString);
+        System.out.println("Load Balancing Server Running!");
+    }
+
+    //get temp points
+    private void getPoints(List<SimplifiedTMSOrder> allOrders) {
+        try {
+			File f = new File("points.txt");
+            InputStreamReader read = new InputStreamReader(new FileInputStream(f));
+            BufferedReader br = new BufferedReader(read);
+            String line = null;
+			while ((line = br.readLine()) != null) {
+				String[] attrs = line.split("\t");
+                SimplifiedTMSOrder stms = new SimplifiedTMSOrder(new TMSOrderLabel(
+                        attrs[0], attrs[1]), new LatLon(attrs[3], attrs[4]));
+                allOrders.add(stms);
+            }
+            read.close();
+        }
+        catch(Exception e){}
+    }
+
+    public static Map<String, String> queryToMap(String query) {
+        Map<String, String> result = new HashMap<>();
+        for (String param : query.split("&")) {
+            String pair[] = param.split("=");
+            if (pair.length > 1) {
+                result.put(pair[0], pair[1]);
+            } else {
+                result.put(pair[0], "");
+            }
+        }
+        return result;
+    }
+
+    public static Date queryToDate(String departureTime) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmm");
+        Date date = null;
+        try {
+            date = sdf.parse(departureTime);
+        } catch(Exception e){
+            date = new Date();
+        }
+        return date;
+    }
+}

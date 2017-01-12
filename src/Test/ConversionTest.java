@@ -1,13 +1,13 @@
 package Test;
 
-import Util.CoordinateUtil;
-import Util.LatLon;
-import Util.SimplifiedTMSOrder;
-
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+
+import Util.CoordinateUtil;
+import Util.LatLon;
+import Util.SimplifiedTMSOrder;
 
 /**
  * Created by BML-KF on 7/13/2016.
@@ -15,7 +15,7 @@ import java.util.List;
 public class ConversionTest {
     public static final List<LatLon> monitored = new ArrayList<>();
     public static void testCoordinateConversion(List<SimplifiedTMSOrder> coordinates) {
-        String filePattern = "C:\\Users\\BML-KF\\Desktop\\Algorithms\\CoordinateResults.txt";
+		String filePattern = "E:\\American study life in poly\\bml\\output\\CoordinateResults.txt";
         PrintWriter pr;
         try {
             pr = new PrintWriter(filePattern);
