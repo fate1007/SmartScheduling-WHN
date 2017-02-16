@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<eclipse-userlibraries>
-  <library name="lib">
-    <archive path="C:/Users/BML-KF/Desktop/backedUpFiles/backups/SmartScheduling/lib/javaml-0.1.7.jar" />
-    <archive path="C:/Users/BML-KF/Desktop/backedUpFiles/backups/SmartScheduling/lib/commons-math3-3.6.1.jar" />
-    <archive path="C:/Users/BML-KF/Desktop/backedUpFiles/backups/SmartScheduling/lib/json-20151123.jar" />
-  </library>
-</eclipse-userlibraries>
-
